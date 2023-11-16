@@ -1,15 +1,15 @@
 package ocf
 
 import (
-	"bytes"
-	"compress/flate"
-	"encoding/binary"
-	"errors"
-	"fmt"
-	"github.com/klauspost/compress/snappy"
-	"github.com/klauspost/compress/zstd"
-	"hash/crc32"
-	"io"
+    "bytes"
+    "compress/flate"
+    "encoding/binary"
+    "errors"
+    "fmt"
+    "github.com/klauspost/compress/snappy"
+    "github.com/klauspost/compress/zstd"
+    "hash/crc32"
+    "io"
 )
 
 // CodecName represents a compression codec name.
@@ -35,7 +35,12 @@ func resolveCodec(name CodecName, lvl int) (Codec, error) {
        return &SnappyCodec{}, nil
 
     case Zstd:
-       return &ZstdCodec{}, nil
+       w, _ := zstd.NewWriter(nil)
+       r, _ := zstd.NewReader(nil)
+       return &ZstdCodec{
+          w: w,
+          r: r,
+       }, nil
 
     default:
        return nil, fmt.Errorf("unknown codec %s", name)
@@ -44,10 +49,10 @@ func resolveCodec(name CodecName, lvl int) (Codec, error) {
 
 // Codec represents a compression codec.
 type Codec interface {
-	// Decode decodes the given bytes.
-	Decode([]byte) ([]byte, error)
-	// Encode encodes the given bytes.
-	Encode([]byte) []byte
+    // Decode decodes the given bytes.
+    Decode([]byte) ([]byte, error)
+    // Encode encodes the given bytes.
+    Encode([]byte) []byte
 }
 
 // NullCodec is a no op codec.
@@ -55,41 +60,41 @@ type NullCodec struct{}
 
 // Decode decodes the given bytes.
 func (*NullCodec) Decode(b []byte) ([]byte, error) {
-	return b, nil
+    return b, nil
 }
 
 // Encode encodes the given bytes.
 func (*NullCodec) Encode(b []byte) []byte {
-	return b
+    return b
 }
 
 // DeflateCodec is a flate compression codec.
 type DeflateCodec struct {
-	compLvl int
+    compLvl int
 }
 
 // Decode decodes the given bytes.
 func (c *DeflateCodec) Decode(b []byte) ([]byte, error) {
-	r := flate.NewReader(bytes.NewBuffer(b))
-	data, err := io.ReadAll(r)
-	if err != nil {
-		_ = r.Close()
-		return nil, err
-	}
-	_ = r.Close()
+    r := flate.NewReader(bytes.NewBuffer(b))
+    data, err := io.ReadAll(r)
+    if err != nil {
+       _ = r.Close()
+       return nil, err
+    }
+    _ = r.Close()
 
-	return data, nil
+    return data, nil
 }
 
 // Encode encodes the given bytes.
 func (c *DeflateCodec) Encode(b []byte) []byte {
-	data := bytes.NewBuffer(make([]byte, 0, len(b)))
+    data := bytes.NewBuffer(make([]byte, 0, len(b)))
 
-	w, _ := flate.NewWriter(data, c.compLvl)
-	_, _ = w.Write(b)
-	_ = w.Close()
+    w, _ := flate.NewWriter(data, c.compLvl)
+    _, _ = w.Write(b)
+    _ = w.Close()
 
-	return data.Bytes()
+    return data.Bytes()
 }
 
 // SnappyCodec is a snappy compression codec.
@@ -97,54 +102,48 @@ type SnappyCodec struct{}
 
 // Decode decodes the given bytes.
 func (*SnappyCodec) Decode(b []byte) ([]byte, error) {
-	l := len(b)
-	if l < 5 {
-		return nil, errors.New("block does not contain snappy checksum")
-	}
+    l := len(b)
+    if l < 5 {
+       return nil, errors.New("block does not contain snappy checksum")
+    }
 
-	dst, err := snappy.Decode(nil, b[:l-4])
-	if err != nil {
-		return nil, err
-	}
-
-	crc := binary.BigEndian.Uint32(b[l-4:])
-	if crc32.ChecksumIEEE(dst) != crc {
-		return nil, errors.New("snappy checksum mismatch")
-	}
-
-	return dst, nil
-}
-
-// Encode encodes the given bytes.
-func (*SnappyCodec) Encode(b []byte) []byte {
-	dst := snappy.Encode(nil, b)
-
-	dst = append(dst, 0, 0, 0, 0)
-	binary.BigEndian.PutUint32(dst[len(dst)-4:], crc32.ChecksumIEEE(b))
-
-	return dst
-}
-
-// ZstdCodec is a zstd compression codec.
-type ZstdCodec struct{}
-
-// Decode decodes the given bytes.
-func (*ZstdCodec) Decode(b []byte) ([]byte, error) {
-    r, err := zstd.NewReader(nil)
+    dst, err := snappy.Decode(nil, b[:l-4])
     if err != nil {
        return nil, err
     }
 
-    dst := make([]byte, 0, len(b)*2)
-    return r.DecodeAll(b, dst)
+    crc := binary.BigEndian.Uint32(b[l-4:])
+    if crc32.ChecksumIEEE(dst) != crc {
+       return nil, errors.New("snappy checksum mismatch")
+    }
+
+    return dst, nil
 }
 
 // Encode encodes the given bytes.
-func (*ZstdCodec) Encode(b []byte) []byte {
-    w, err := zstd.NewWriter(nil)
-    if err != nil {
-       return nil
-    }
-    dst := make([]byte, 0, len(b)/2)
-    return w.EncodeAll(b, dst)
+func (*SnappyCodec) Encode(b []byte) []byte {
+    dst := snappy.Encode(nil, b)
+
+    dst = append(dst, 0, 0, 0, 0)
+    binary.BigEndian.PutUint32(dst[len(dst)-4:], crc32.ChecksumIEEE(b))
+
+    return dst
+}
+
+// ZstdCodec is a zstd compression codec.
+type ZstdCodec struct {
+    w *zstd.Encoder
+    r *zstd.Decoder
+}
+
+// Decode decodes the given bytes.
+func (z *ZstdCodec) Decode(b []byte) ([]byte, error) {
+    dst := make([]byte, 0, len(b)*2)
+    return z.r.DecodeAll(b, dst)
+}
+
+// Encode encodes the given bytes.
+func (z *ZstdCodec) Encode(b []byte) []byte {
+    dst := make([]byte, 0, len(b))
+    return z.w.EncodeAll(b, dst)
 }
