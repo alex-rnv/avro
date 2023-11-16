@@ -6,10 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/snappy"
+	"github.com/klauspost/compress/zstd"
 	"hash/crc32"
 	"io"
-
-	"github.com/golang/snappy"
 )
 
 // CodecName represents a compression codec name.
@@ -17,25 +17,29 @@ type CodecName string
 
 // Supported compression codecs.
 const (
-	Null    CodecName = "null"
-	Deflate CodecName = "deflate"
-	Snappy  CodecName = "snappy"
+    Null    CodecName = "null"
+    Deflate CodecName = "deflate"
+    Snappy  CodecName = "snappy"
+    Zstd    CodecName = "zstandard"
 )
 
 func resolveCodec(name CodecName, lvl int) (Codec, error) {
-	switch name {
-	case Null, "":
-		return &NullCodec{}, nil
+    switch name {
+    case Null, "":
+       return &NullCodec{}, nil
 
-	case Deflate:
-		return &DeflateCodec{compLvl: lvl}, nil
+    case Deflate:
+       return &DeflateCodec{compLvl: lvl}, nil
 
-	case Snappy:
-		return &SnappyCodec{}, nil
+    case Snappy:
+       return &SnappyCodec{}, nil
 
-	default:
-		return nil, fmt.Errorf("unknown codec %s", name)
-	}
+    case Zstd:
+       return &ZstdCodec{}, nil
+
+    default:
+       return nil, fmt.Errorf("unknown codec %s", name)
+    }
 }
 
 // Codec represents a compression codec.
@@ -119,4 +123,28 @@ func (*SnappyCodec) Encode(b []byte) []byte {
 	binary.BigEndian.PutUint32(dst[len(dst)-4:], crc32.ChecksumIEEE(b))
 
 	return dst
+}
+
+// ZstdCodec is a zstd compression codec.
+type ZstdCodec struct{}
+
+// Decode decodes the given bytes.
+func (*ZstdCodec) Decode(b []byte) ([]byte, error) {
+    r, err := zstd.NewReader(nil)
+    if err != nil {
+       return nil, err
+    }
+
+    dst := make([]byte, len(b)*2)
+    return r.DecodeAll(b, dst)
+}
+
+// Encode encodes the given bytes.
+func (*ZstdCodec) Encode(b []byte) []byte {
+    w, err := zstd.NewWriter(nil)
+    if err != nil {
+       return nil
+    }
+    dst := make([]byte, len(b)/2)
+    return w.EncodeAll(b, dst)
 }
