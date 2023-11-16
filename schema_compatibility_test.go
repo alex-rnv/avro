@@ -3,7 +3,7 @@ package avro_test
 import (
 	"testing"
 
-	"github.com/hamba/avro/v2"
+	"github.com/alex-rnv/avro/v2"
 	"github.com/stretchr/testify/assert"
 )
 
