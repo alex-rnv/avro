@@ -1,4 +1,4 @@
-module github.com/hamba/avro/v2
+module github.com/alex-rnv/avro/v2
 
 go 1.19
 
