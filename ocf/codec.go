@@ -135,7 +135,7 @@ func (*ZstdCodec) Decode(b []byte) ([]byte, error) {
        return nil, err
     }
 
-    dst := make([]byte, len(b)*2)
+    dst := make([]byte, 0, len(b)*2)
     return r.DecodeAll(b, dst)
 }
 
@@ -145,6 +145,6 @@ func (*ZstdCodec) Encode(b []byte) []byte {
     if err != nil {
        return nil
     }
-    dst := make([]byte, len(b)/2)
+    dst := make([]byte, 0, len(b)/2)
     return w.EncodeAll(b, dst)
 }

@@ -806,3 +806,21 @@ type errorHeaderWriter struct{}
 func (*errorHeaderWriter) Write(p []byte) (int, error) {
 	return 0, errors.New("test")
 }
+
+func TestZstdEncoderDecoder(t *testing.T) {
+    codec := ocf.ZstdCodec{}
+    str := []byte{0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04}
+    encoded := codec.Encode(str)
+    decoded, err := codec.Decode(encoded)
+    if err != nil {
+       t.Fatal(err)
+    }
+    if len(str) != len(decoded) {
+       t.Fatalf("decoded string has different length: %v", decoded)
+    }
+    for i, _ := range str {
+       if str[i] != decoded[i] {
+          t.Fatalf("bytes at index '%d' mismatch: %v-%v", i, str[i], decoded[i])
+       }
+    }
+}
